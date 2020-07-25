@@ -19,7 +19,6 @@
 #include <ROOT/RColumn.hxx>
 #include <ROOT/RError.hxx>
 #include <ROOT/RColumnElement.hxx>
-#include <ROOT/RField.hxx>
 #include <ROOT/RFieldValue.hxx>
 #include <ROOT/RNTupleUtil.hxx>
 #include <ROOT/RSpan.hxx>
@@ -48,9 +47,9 @@ class TClass;
 namespace ROOT {
 namespace Experimental {
 
+class RCollectionField;
 class RCollectionNTuple;
 class REntry;
-class RCollectionField;
 class RNTupleModel;
 
 namespace Detail {

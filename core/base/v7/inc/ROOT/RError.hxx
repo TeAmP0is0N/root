@@ -159,6 +159,16 @@ public:
    /// Throws an RException with fError
    void Throw();
 
+   /// Used by R__FORWARD_ERROR in order to keep track of the stack trace.
+   static RError ForwardError(RResultBase &&result, RError::RLocation &&sourceLocation) {
+      if (!result.fError) {
+         return RError("internal error: attempt to forward error of successful operation",
+                       std::move(sourceLocation));
+      }
+      result.fError->AddFrame(std::move(sourceLocation));
+      return *result.fError;
+   }
+
    // Help to prevent heap construction of RResult objects. Unchecked RResult objects in failure state should throw
    // an exception close to the error location. For stack allocated RResult objects, an exception is thrown
    // the latest when leaving the scope. Heap allocated RResult objects in failure state can live much longer making it
@@ -214,10 +224,10 @@ public:
    ~RResult() = default;
 
    /// Used by R__FORWARD_RESULT in order to keep track of the stack trace in case of errors
-   static RResult &Forward(RResult &result, RError::RLocation &&sourceLocation) {
-      if (result.fError)
-         result.fError->AddFrame(std::move(sourceLocation));
-      return result;
+   RResult &Forward(RError::RLocation &&sourceLocation) {
+      if (fError)
+         fError->AddFrame(std::move(sourceLocation));
+      return *this;
    }
 
    /// If the operation was successful, returns a const reference to the inner type.
@@ -261,10 +271,10 @@ public:
    ~RResult() = default;
 
    /// Used by R__FORWARD_RESULT in order to keep track of the stack trace in case of errors
-   static RResult &Forward(RResult &result, RError::RLocation &&sourceLocation) {
-      if (result.fError)
-         result.fError->AddFrame(std::move(sourceLocation));
-      return result;
+   RResult &Forward(RError::RLocation &&sourceLocation) {
+      if (fError)
+         fError->AddFrame(std::move(sourceLocation));
+      return *this;
    }
 
    /// Short-hand method to throw an exception in the case of errors. Does nothing for
@@ -280,7 +290,9 @@ public:
 /// Short-hand to return an RResult<T> in an error state; the RError is implicitly converted into RResult<T>
 #define R__FAIL(msg) ROOT::Experimental::RError(msg, {R__LOG_PRETTY_FUNCTION, __FILE__, __LINE__})
 /// Short-hand to return an RResult<T> value from a subroutine to the calling stack frame
-#define R__FORWARD_RESULT(res) std::move(res.Forward(res, {R__LOG_PRETTY_FUNCTION, __FILE__, __LINE__}))
+#define R__FORWARD_RESULT(res) std::move(res.Forward({R__LOG_PRETTY_FUNCTION, __FILE__, __LINE__}))
+/// Short-hand to return an RResult<T> in an error state (i.e. after checking)
+#define R__FORWARD_ERROR(res) res.ForwardError(std::move(res), {R__LOG_PRETTY_FUNCTION, __FILE__, __LINE__})
 } // namespace Experimental
 } // namespace ROOT
 

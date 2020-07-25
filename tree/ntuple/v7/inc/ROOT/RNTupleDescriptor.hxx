@@ -17,6 +17,7 @@
 #define ROOT7_RNTupleDescriptor
 
 #include <ROOT/RColumnModel.hxx>
+#include <ROOT/RError.hxx>
 #include <ROOT/RNTupleUtil.hxx>
 #include <ROOT/RStringView.hxx>
 
@@ -32,6 +33,7 @@
 namespace ROOT {
 namespace Experimental {
 
+class RDanglingFieldDescriptor;
 class RNTupleDescriptorBuilder;
 class RNTupleModel;
 
@@ -44,13 +46,14 @@ class RNTupleModel;
 // clang-format on
 class RFieldDescriptor {
    friend class RNTupleDescriptorBuilder;
+   friend class RDanglingFieldDescriptor;
 
 private:
    DescriptorId_t fFieldId = kInvalidDescriptorId;
    /// The version of the C++-type-to-column translation mechanics
-   RNTupleVersion fFieldVersion;
+   RNTupleVersion fFieldVersion = RNTupleVersion();
    /// The version of the C++ type itself
-   RNTupleVersion fTypeVersion;
+   RNTupleVersion fTypeVersion = RNTupleVersion();
    /// The leaf name, not including parent fields
    std::string fFieldName;
    /// Free text set by the user
@@ -58,9 +61,9 @@ private:
    /// The C++ type that was used when writing the field
    std::string fTypeName;
    /// The number of elements per entry for fixed-size arrays
-   std::uint64_t fNRepetitions;
+   std::uint64_t fNRepetitions = 0;
    /// The structural information carried by this field in the data model tree
-   ENTupleStructure fStructure;
+   ENTupleStructure fStructure = ENTupleStructure::kInvalid;
    /// Establishes sub field relationships, such as classes and collections
    DescriptorId_t fParentId = kInvalidDescriptorId;
    /// The pointers in the other direction from parent to children. They are serialized, too, to keep the
@@ -68,17 +71,19 @@ private:
    std::vector<DescriptorId_t> fLinkIds;
 
 public:
-   /// In order to handle changes to the serialization routine in future ntuple versions
-   static constexpr std::uint16_t kFrameVersionCurrent = 0;
-   static constexpr std::uint16_t kFrameVersionMin = 0;
-
    RFieldDescriptor() = default;
    RFieldDescriptor(const RFieldDescriptor &other) = delete;
    RFieldDescriptor &operator =(const RFieldDescriptor &other) = delete;
    RFieldDescriptor(RFieldDescriptor &&other) = default;
    RFieldDescriptor &operator =(RFieldDescriptor &&other) = default;
 
+   /// In order to handle changes to the serialization routine in future ntuple versions
+   static constexpr std::uint16_t kFrameVersionCurrent = 0;
+   static constexpr std::uint16_t kFrameVersionMin = 0;
+
    bool operator==(const RFieldDescriptor &other) const;
+   /// Get a copy of the descriptor
+   RFieldDescriptor Clone() const;
 
    DescriptorId_t GetId() const { return fFieldId; }
    RNTupleVersion GetFieldVersion() const { return fFieldVersion; }
@@ -455,6 +460,78 @@ public:
    void PrintInfo(std::ostream &output) const;
 };
 
+namespace Detail {
+   class RFieldBase;
+}
+
+// clang-format off
+/**
+\class ROOT::Experimental::RDanglingFieldDescriptor
+\ingroup NTuple
+\brief A helper class for piece-wise construction of an RFieldDescriptor
+
+Dangling field descriptors describe a single field in isolation. They are
+missing the necessary relationship information (parent field, any child fields)
+required to describe a real NTuple field.
+
+Dangling field descriptors can only become actual descriptors when added to an
+RNTupleDescriptorBuilder instance and then linked to other fields.
+*/
+// clang-format on
+class RDanglingFieldDescriptor {
+private:
+   RFieldDescriptor fField = RFieldDescriptor();
+public:
+   /// Make an empty dangling field descriptor.
+   RDanglingFieldDescriptor() = default;
+   /// Make a new RDanglingFieldDescriptor based off an existing descriptor.
+   /// Relationship information is lost during the conversion to a
+   /// dangling descriptor:
+   /// * Parent id is reset to an invalid id.
+   /// * Field children ids are forgotten.
+   ///
+   /// These properties must be set using RNTupleDescriptorBuilder::AddFieldLink().
+   explicit RDanglingFieldDescriptor(const RFieldDescriptor& fieldDesc);
+
+   /// Make a new RDanglingFieldDescriptor based off a live NTuple field.
+   static RDanglingFieldDescriptor FromField(const Detail::RFieldBase& field);
+
+   RDanglingFieldDescriptor& FieldId(DescriptorId_t fieldId) {
+      fField.fFieldId = fieldId;
+      return *this;
+   }
+   RDanglingFieldDescriptor& FieldVersion(const RNTupleVersion& fieldVersion) {
+      fField.fFieldVersion = fieldVersion;
+      return *this;
+   }
+   RDanglingFieldDescriptor& TypeVersion(const RNTupleVersion& typeVersion) {
+      fField.fTypeVersion = typeVersion;
+      return *this;
+   }
+   RDanglingFieldDescriptor& FieldName(const std::string& fieldName) {
+      fField.fFieldName = fieldName;
+      return *this;
+   }
+   RDanglingFieldDescriptor& FieldDescription(const std::string& fieldDescription) {
+      fField.fFieldDescription = fieldDescription;
+      return *this;
+   }
+   RDanglingFieldDescriptor& TypeName(const std::string& typeName) {
+      fField.fTypeName = typeName;
+      return *this;
+   }
+   RDanglingFieldDescriptor& NRepetitions(std::uint64_t nRepetitions) {
+      fField.fNRepetitions = nRepetitions;
+      return *this;
+   }
+   RDanglingFieldDescriptor& Structure(const ENTupleStructure& structure) {
+      fField.fStructure = structure;
+      return *this;
+   }
+   /// Attempt to make a field descriptor. This may fail if the dangling field
+   /// was not given enough information to make a proper descriptor.
+   RResult<RFieldDescriptor> MakeDescriptor() const;
+};
 
 // clang-format off
 /**
@@ -477,9 +554,7 @@ public:
    void SetNTuple(const std::string_view name, const std::string_view description, const std::string_view author,
                   const RNTupleVersion &version, const RNTupleUuid &uuid);
 
-   void AddField(DescriptorId_t fieldId, const RNTupleVersion &fieldVersion, const RNTupleVersion &typeVersion,
-                 std::string_view fieldName, std::string_view typeName, std::uint64_t nRepetitions,
-                 ENTupleStructure structure);
+   void AddField(const RFieldDescriptor& fieldDesc);
    void AddFieldLink(DescriptorId_t fieldId, DescriptorId_t linkId);
 
    void AddColumn(DescriptorId_t columnId, DescriptorId_t fieldId,

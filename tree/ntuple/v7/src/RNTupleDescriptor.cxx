@@ -13,6 +13,7 @@
  * For the list of contributors see $ROOTSYS/README/CREDITS.             *
  *************************************************************************/
 
+#include <ROOT/RField.hxx>
 #include <ROOT/RNTupleDescriptor.hxx>
 #include <ROOT/RNTupleModel.hxx>
 #include <ROOT/RNTupleUtil.hxx>
@@ -484,6 +485,22 @@ bool ROOT::Experimental::RFieldDescriptor::operator==(const RFieldDescriptor &ot
           fLinkIds == other.fLinkIds;
 }
 
+ROOT::Experimental::RFieldDescriptor
+ROOT::Experimental::RFieldDescriptor::Clone() const {
+   RFieldDescriptor clone;
+   clone.fFieldId = fFieldId;
+   clone.fFieldVersion = fFieldVersion;
+   clone.fTypeVersion = fTypeVersion;
+   clone.fFieldName = fFieldName;
+   clone.fFieldDescription = fFieldDescription;
+   clone.fTypeName = fTypeName;
+   clone.fNRepetitions = fNRepetitions;
+   clone.fStructure = fStructure;
+   clone.fParentId = fParentId;
+   clone.fLinkIds = fLinkIds;
+   return clone;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -890,19 +907,45 @@ void ROOT::Experimental::RNTupleDescriptorBuilder::SetNTuple(
    fDescriptor.fGroupUuid = uuid;
 }
 
-void ROOT::Experimental::RNTupleDescriptorBuilder::AddField(
-   DescriptorId_t fieldId, const RNTupleVersion &fieldVersion, const RNTupleVersion &typeVersion,
-   std::string_view fieldName, std::string_view typeName, std::uint64_t nRepetitions, ENTupleStructure structure)
+ROOT::Experimental::RDanglingFieldDescriptor::RDanglingFieldDescriptor(
+   const RFieldDescriptor& fieldDesc) : fField(fieldDesc.Clone())
 {
-   RFieldDescriptor f;
-   f.fFieldId = fieldId;
-   f.fFieldVersion = fieldVersion;
-   f.fTypeVersion = typeVersion;
-   f.fFieldName = std::string(fieldName);
-   f.fTypeName = std::string(typeName);
-   f.fNRepetitions = nRepetitions;
-   f.fStructure = structure;
-   fDescriptor.fFieldDescriptors.emplace(fieldId, std::move(f));
+   fField.fParentId = kInvalidDescriptorId;
+   fField.fLinkIds = {};
+}
+
+ROOT::Experimental::RDanglingFieldDescriptor
+ROOT::Experimental::RDanglingFieldDescriptor::FromField(const Detail::RFieldBase& field) {
+   RDanglingFieldDescriptor fieldDesc;
+   fieldDesc.FieldVersion(field.GetFieldVersion())
+      .TypeVersion(field.GetTypeVersion())
+      .FieldName(field.GetName())
+      .TypeName(field.GetType())
+      .Structure(field.GetStructure())
+      .NRepetitions(field.GetNRepetitions());
+   return fieldDesc;
+}
+
+ROOT::Experimental::RResult<ROOT::Experimental::RFieldDescriptor>
+ROOT::Experimental::RDanglingFieldDescriptor::MakeDescriptor() const {
+   if (fField.GetId() == kInvalidDescriptorId) {
+      return R__FAIL("invalid field id");
+   }
+   if (fField.GetStructure() == ENTupleStructure::kInvalid) {
+      return R__FAIL("invalid field structure");
+   }
+   // FieldZero is usually named "" and would be a false positive here
+   if (fField.GetId() != DescriptorId_t(0)) {
+      auto validName = Detail::RFieldBase::EnsureValidFieldName(fField.GetFieldName());
+      if (!validName) {
+         return R__FORWARD_ERROR(validName);
+      }
+   }
+   return fField.Clone();
+}
+
+void ROOT::Experimental::RNTupleDescriptorBuilder::AddField(const RFieldDescriptor& fieldDesc) {
+   fDescriptor.fFieldDescriptors.emplace(fieldDesc.GetId(), fieldDesc.Clone());
 }
 
 void ROOT::Experimental::RNTupleDescriptorBuilder::AddFieldLink(DescriptorId_t fieldId, DescriptorId_t linkId)

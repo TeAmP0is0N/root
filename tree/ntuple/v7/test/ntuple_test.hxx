@@ -11,6 +11,7 @@
 #include <ROOT/RNTuple.hxx>
 #include <ROOT/RNTupleDescriptor.hxx>
 #include <ROOT/RNTupleDS.hxx>
+#include <ROOT/RNTupleMerger.hxx>
 #include <ROOT/RNTupleMetrics.hxx>
 #include <ROOT/RNTupleModel.hxx>
 #include <ROOT/RNTupleOptions.hxx>
@@ -44,7 +45,7 @@
 #if __cplusplus >= 201703L
 #include <variant>
 #endif
-#include <vector> 
+#include <vector>
 
 using DescriptorId_t = ROOT::Experimental::DescriptorId_t;
 using EColumnType = ROOT::Experimental::EColumnType;
@@ -52,13 +53,16 @@ using ENTupleContainerFormat = ROOT::Experimental::ENTupleContainerFormat;
 using ENTupleStructure = ROOT::Experimental::ENTupleStructure;
 using NTupleSize_t = ROOT::Experimental::NTupleSize_t;
 using RColumnModel = ROOT::Experimental::RColumnModel;
+using RDanglingFieldDescriptor = ROOT::Experimental::RDanglingFieldDescriptor;
 using RException = ROOT::Experimental::RException;
 template <class T>
 using RField = ROOT::Experimental::RField<T>;
 using RFieldBase = ROOT::Experimental::Detail::RFieldBase;
+using RFieldDescriptor = ROOT::Experimental::RFieldDescriptor;
+using RFieldMerger = ROOT::Experimental::RFieldMerger;
 using RFieldValue = ROOT::Experimental::Detail::RFieldValue;
 using RMiniFileReader = ROOT::Experimental::Internal::RMiniFileReader;
-using RNTuple = ROOT::Experimental::RNTuple; 
+using RNTuple = ROOT::Experimental::RNTuple;
 using RNTupleAtomicCounter = ROOT::Experimental::Detail::RNTupleAtomicCounter;
 using RNTupleAtomicTimer = ROOT::Experimental::Detail::RNTupleAtomicTimer;
 using RNTupleCompressor = ROOT::Experimental::Detail::RNTupleCompressor;
@@ -86,6 +90,8 @@ using RPageSourceFile = ROOT::Experimental::Detail::RPageSourceFile;
 using RPrepareVisitor = ROOT::Experimental::RPrepareVisitor;
 using RPrintSchemaVisitor = ROOT::Experimental::RPrintSchemaVisitor;
 using RRawFile = ROOT::Internal::RRawFile;
+template <class T>
+using RResult = ROOT::Experimental::RResult<T>;
 
 /**
  * An RAII wrapper around an open temporary file on disk. It cleans up the guarded file when the wrapper object
